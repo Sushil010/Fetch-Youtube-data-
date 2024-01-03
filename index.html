@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Channel Video Stats</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      width: 80%;
+      margin: 0 auto;
+      text-align: center;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    input[type="text"] {
+      padding: 8px;
+      margin: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 5px;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YouTube Channel Video Stats</h1>
+    <input type="text" id="channelName" placeholder="Enter channel name">
+    <button onclick="getVideoStats()">Get Stats</button>
+    <div id="statsDisplay"></div>
+  </div>
+
+  <script>
+    function getVideoStats() {
+      const channelName = document.getElementById('channelName').value;
+      const apiKey = 'AIzaSyAcKIno7KiqWLGwthNK5cz4k7uj-3cxA4I';
+      const statsDisplay = document.getElementById('statsDisplay');
+      statsDisplay.innerHTML = ''; // Clear previous content
+
+      console.log('Fetching video stats for channel:', channelName);
+
+      fetch(`https://www.googleapis.com/youtube/v3/search?part=id&type=channel&maxResults=1&q=${channelName}&key=${apiKey}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Channel ID:', data.items[0].id.channelId);
+          const channelID = data.items[0].id.channelId;
+          return fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelID}&key=${apiKey}`);
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Playlist ID:', data.items[0].contentDetails.relatedPlaylists.uploads);
+          const uploadsPlaylistID = data.items[0].contentDetails.relatedPlaylists.uploads;
+          return fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistID}&maxResults=50&key=${apiKey}`);
+        })
+        .then(response => response.json())
+        .then(data => {
+          const videoStats = [];
+          if (data.items) {
+            data.items.forEach(item => {
+              const videoId = item.snippet.resourceId.videoId;
+              videoStats.push(fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`)
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                  }
+                  return response.json();
+                })
+                .then(videoData => {
+                  const videoInfo = {
+                    title: videoData.items[0].snippet.title,
+                    views: videoData.items[0].statistics.viewCount,
+                    likes: videoData.items[0].statistics.likeCount || 0,
+                  };
+                  return videoInfo;
+                })
+              );
+            });
+          }
+          return Promise.all(videoStats);
+        })
+        .then(videoStats => {
+          if (videoStats.length === 0) {
+            statsDisplay.innerHTML = 'No videos found for this channel.';
+            return;
+          }
+
+          const table = document.createElement('table');
+          const header = table.createTHead();
+          const row = header.insertRow(0);
+          const headers = ['Title', 'Views', 'Likes'];
+          headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.textContent = headerText;
+            row.appendChild(th);
+          });
+
+          const tbody = document.createElement('tbody');
+          videoStats.forEach(video => {
+            const tr = tbody.insertRow(-1);
+            const { title, views, likes } = video;
+            const cells = [title, views, likes];
+            cells.forEach(cellData => {
+              const td = document.createElement('td');
+              td.textContent = cellData;
+              tr.appendChild(td);
+            });
+          });
+
+          table.appendChild(header);
+          table.appendChild(tbody);
+          statsDisplay.appendChild(table);
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error);
+          statsDisplay.innerHTML = 'Failed to fetch video stats. Please check the console for details.';
+        });
+    }
+  </script>
+</body>
+</html>
